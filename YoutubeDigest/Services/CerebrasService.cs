@@ -1,9 +1,9 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using YoutubeSummarizer.Models;
+using YoutubeDigest.Models;
 
-namespace YoutubeSummarizer.Services;
+namespace YoutubeDigest.Services;
 
 public class CerebrasService
 {

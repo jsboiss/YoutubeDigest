@@ -1,6 +1,6 @@
 using MudBlazor.Services;
-using YoutubeSummarizer.Components;
-using YoutubeSummarizer.Services;
+using YoutubeDigest.Components;
+using YoutubeDigest.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 

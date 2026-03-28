@@ -2,9 +2,9 @@ using System.Net;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
-using YoutubeSummarizer.Models;
+using YoutubeDigest.Models;
 
-namespace YoutubeSummarizer.Services;
+namespace YoutubeDigest.Services;
 
 public class YouTubeService
 {

@@ -1,4 +1,4 @@
-namespace YoutubeSummarizer.Models;
+namespace YoutubeDigest.Models;
 
 public class VideoAnalysis
 {
