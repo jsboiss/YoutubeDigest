@@ -1,0 +1,346 @@
+@page "/"
+@rendermode InteractiveServer
+@inject YouTubeService YouTube
+@inject CerebrasService Cerebras
+
+<PageTitle>YouTube Summarizer</PageTitle>
+
+<MudStack Spacing="4">
+
+    @* URL Input *@
+    <MudPaper Elevation="3" Class="pa-6" Style="border-radius:12px">
+        <MudText Typo="Typo.h5" Class="mb-1" Style="font-weight:600">Analyse a YouTube Video</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+            Paste any YouTube URL to get an AI-generated summary, video stats, and comment sentiment.
+        </MudText>
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Start">
+            <MudTextField @bind-Value="_url"
+                          Label="YouTube URL"
+                          Placeholder="https://www.youtube.com/watch?v=..."
+                          Variant="Variant.Outlined"
+                          FullWidth="true"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Link"
+                          Disabled="_loading"
+                          OnKeyDown="OnKeyDown"
+                          Error="@(!string.IsNullOrEmpty(_urlError))"
+                          ErrorText="@_urlError" />
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Error"
+                       Size="Size.Large"
+                       Style="height:56px; min-width:130px; border-radius:8px"
+                       StartIcon="@Icons.Material.Filled.AutoAwesome"
+                       OnClick="AnalyseAsync"
+                       Disabled="_loading">
+                @(_loading ? "Analysing..." : "Analyse")
+            </MudButton>
+        </MudStack>
+    </MudPaper>
+
+    @* Progress *@
+    @if (_loading)
+    {
+        <MudPaper Elevation="1" Class="pa-4" Style="border-radius:12px">
+            <MudStack Spacing="2">
+                @foreach (var step in _steps)
+                {
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                        @if (step.Done)
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" />
+                        }
+                        else if (step.Active)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Error" />
+                        }
+                        else
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.RadioButtonUnchecked" Color="Color.Default" Size="Size.Small" />
+                        }
+                        <MudText Typo="Typo.body2"
+                                 Color="@(step.Done ? Color.Success : step.Active ? Color.Default : Color.Secondary)">
+                            @step.Label
+                        </MudText>
+                    </MudStack>
+                }
+            </MudStack>
+        </MudPaper>
+    }
+
+    @* Error *@
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Filled" ShowCloseIcon="true" CloseIconClicked="() => _error = null">
+            @_error
+        </MudAlert>
+    }
+
+    @* Results *@
+    @if (_result is not null)
+    {
+        @* Video Info Card *@
+        <MudCard Elevation="3" Style="border-radius:12px; overflow:hidden">
+            <MudCardContent Class="pa-0">
+                <MudGrid Spacing="0">
+                    @if (!string.IsNullOrEmpty(_result.ThumbnailUrl))
+                    {
+                        <MudItem xs="12" sm="4">
+                            <img src="@_result.ThumbnailUrl" alt="thumbnail"
+                                 style="width:100%; height:100%; object-fit:cover; display:block; max-height:200px" />
+                        </MudItem>
+                    }
+                    <MudItem xs="12" sm="@(_result.ThumbnailUrl != "" ? 8 : 12)">
+                        <MudStack Class="pa-4" Spacing="1" Justify="Justify.Center" Style="height:100%">
+                            @if (!string.IsNullOrEmpty(_result.Title))
+                            {
+                                <MudText Typo="Typo.h6" Style="font-weight:600; line-height:1.3">@_result.Title</MudText>
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                    <MudIcon Icon="@Icons.Material.Filled.AccountCircle" Size="Size.Small" Color="Color.Secondary" />
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary">@_result.ChannelName</MudText>
+                                    @if (!string.IsNullOrEmpty(_result.PublishedAt) &&
+                                         DateTime.TryParse(_result.PublishedAt, out var pub))
+                                    {
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">· @pub.ToString("MMM d, yyyy")</MudText>
+                                    }
+                                </MudStack>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                    Video stats unavailable — YouTube API key not configured.
+                                </MudText>
+                            }
+
+                            @if (_result.ViewCount > 0 || _result.LikeCount > 0 || _result.CommentCount > 0)
+                            {
+                                <MudStack Row="true" Spacing="2" Class="mt-2" Wrap="Wrap.Wrap">
+                                    <MudTooltip Text="Views">
+                                        <MudChip T="string" Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" Variant="Variant.Outlined">
+                                            @FormatNumber(_result.ViewCount)
+                                        </MudChip>
+                                    </MudTooltip>
+                                    <MudTooltip Text="Likes">
+                                        <MudChip T="string" Icon="@Icons.Material.Filled.ThumbUp" Size="Size.Small" Variant="Variant.Outlined">
+                                            @FormatNumber(_result.LikeCount)
+                                        </MudChip>
+                                    </MudTooltip>
+                                    <MudTooltip Text="Comments">
+                                        <MudChip T="string" Icon="@Icons.Material.Filled.Comment" Size="Size.Small" Variant="Variant.Outlined">
+                                            @FormatNumber(_result.CommentCount)
+                                        </MudChip>
+                                    </MudTooltip>
+                                </MudStack>
+                            }
+                        </MudStack>
+                    </MudItem>
+                </MudGrid>
+            </MudCardContent>
+        </MudCard>
+
+        @* Summary Card *@
+        @if (!string.IsNullOrEmpty(_result.Summary))
+        {
+            <MudCard Elevation="3" Style="border-radius:12px">
+                <MudCardContent>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-3">
+                        <MudIcon Icon="@Icons.Material.Filled.AutoAwesome" Color="Color.Warning" />
+                        <MudText Typo="Typo.h6" Style="font-weight:600">AI Summary</MudText>
+                    </MudStack>
+                    <MudText Typo="Typo.body1" Style="white-space:pre-wrap; line-height:1.7">@_result.Summary</MudText>
+                </MudCardContent>
+            </MudCard>
+        }
+
+        @* Comments + Sentiment *@
+        @if (_result.TopComments.Count > 0)
+        {
+            <MudCard Elevation="3" Style="border-radius:12px">
+                <MudCardContent>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-3">
+                        <MudIcon Icon="@Icons.Material.Filled.Forum" Color="Color.Info" />
+                        <MudText Typo="Typo.h6" Style="font-weight:600">Top Comments</MudText>
+                        @if (_result.Sentiment != SentimentLabel.Unknown)
+                        {
+                            <MudSpacer />
+                            <MudChip T="string"
+                                     Color="@SentimentColor(_result.Sentiment)"
+                                     Size="Size.Small"
+                                     Icon="@SentimentIcon(_result.Sentiment)">
+                                @_result.Sentiment.ToString() sentiment
+                            </MudChip>
+                        }
+                    </MudStack>
+
+                    @if (!string.IsNullOrEmpty(_result.SentimentSummary))
+                    {
+                        <MudAlert Severity="@SentimentSeverity(_result.Sentiment)"
+                                  Variant="Variant.Outlined"
+                                  Dense="true"
+                                  Class="mb-3">
+                            @_result.SentimentSummary
+                        </MudAlert>
+                    }
+
+                    <MudStack Spacing="2">
+                        @foreach (var comment in _result.TopComments)
+                        {
+                            <MudPaper Outlined="true" Class="pa-3" Style="border-radius:8px">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-1">
+                                    <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" Color="Color.Secondary" />
+                                    <MudText Typo="Typo.caption" Style="font-weight:600">@comment.Author</MudText>
+                                    @if (comment.LikeCount > 0)
+                                    {
+                                        <MudSpacer />
+                                        <MudIcon Icon="@Icons.Material.Filled.ThumbUp" Size="Size.Small" Color="Color.Secondary" />
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">@FormatNumber(comment.LikeCount)</MudText>
+                                    }
+                                </MudStack>
+                                <MudText Typo="Typo.body2">@comment.Text</MudText>
+                            </MudPaper>
+                        }
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        }
+
+        @* Transcript Accordion *@
+        @if (!string.IsNullOrEmpty(_result.Transcript))
+        {
+            <MudExpansionPanels Elevation="3" Style="border-radius:12px; overflow:hidden">
+                <MudExpansionPanel Text="Full Transcript" Icon="@Icons.Material.Filled.Subtitles">
+                    <MudText Typo="Typo.body2" Style="white-space:pre-wrap; line-height:1.8; max-height:400px; overflow-y:auto; display:block">
+                        @_result.Transcript
+                    </MudText>
+                </MudExpansionPanel>
+            </MudExpansionPanels>
+        }
+    }
+
+</MudStack>
+
+@code {
+    private string _url = "";
+    private string? _urlError;
+    private string? _error;
+    private bool _loading;
+    private VideoAnalysis? _result;
+    private List<ProgressStep> _steps = new();
+
+    private record ProgressStep(string Label, bool Done = false, bool Active = false);
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await AnalyseAsync();
+    }
+
+    private async Task AnalyseAsync()
+    {
+        _urlError = null;
+        _error = null;
+        _result = null;
+
+        var videoId = YouTubeService.ExtractVideoId(_url);
+        if (videoId is null)
+        {
+            _urlError = "Please enter a valid YouTube URL.";
+            return;
+        }
+
+        _loading = true;
+        _steps = new List<ProgressStep>
+        {
+            new("Fetching transcript"),
+            new("Fetching video stats & comments"),
+            new("Generating AI summary"),
+            new("Analysing comment sentiment"),
+        };
+        StateHasChanged();
+
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+
+            // Steps 1 & 2 in parallel
+            SetActive(0); SetActive(1);
+            StateHasChanged();
+
+            var transcriptTask = YouTube.GetTranscriptAsync(videoId, cts.Token);
+            var metaTask = YouTube.GetVideoMetadataAsync(videoId, cts.Token);
+            var commentsTask = YouTube.GetTopCommentsAsync(videoId, 5, cts.Token);
+
+            await Task.WhenAll(transcriptTask, metaTask, commentsTask);
+
+            var transcript = await transcriptTask;
+            var meta = await metaTask;
+            var comments = await commentsTask;
+
+            meta.Transcript = transcript;
+            meta.TopComments = comments;
+
+            SetDone(0); SetDone(1);
+
+            // Step 3: generate summary
+            SetActive(2);
+            StateHasChanged();
+            meta.Summary = await Cerebras.SummarizeTranscriptAsync(transcript, meta.Title, cts.Token);
+            SetDone(2);
+
+            // Step 4: comment sentiment
+            SetActive(3);
+            StateHasChanged();
+            if (comments.Count > 0)
+            {
+                var (sentimentText, label) = await Cerebras.AnalyzeCommentSentimentAsync(comments, cts.Token);
+                meta.SentimentSummary = sentimentText;
+                meta.Sentiment = label;
+            }
+            SetDone(3);
+
+            _result = meta;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void SetActive(int i) => _steps[i] = _steps[i] with { Active = true, Done = false };
+    private void SetDone(int i) => _steps[i] = _steps[i] with { Active = false, Done = true };
+
+    private static string FormatNumber(long n) => n switch
+    {
+        >= 1_000_000_000 => $"{n / 1_000_000_000.0:F1}B",
+        >= 1_000_000     => $"{n / 1_000_000.0:F1}M",
+        >= 1_000         => $"{n / 1_000.0:F1}K",
+        _                => n.ToString()
+    };
+
+    private static Color SentimentColor(SentimentLabel s) => s switch
+    {
+        SentimentLabel.Positive => Color.Success,
+        SentimentLabel.Negative => Color.Error,
+        SentimentLabel.Mixed    => Color.Warning,
+        _                       => Color.Default
+    };
+
+    private static string SentimentIcon(SentimentLabel s) => s switch
+    {
+        SentimentLabel.Positive => Icons.Material.Filled.SentimentVerySatisfied,
+        SentimentLabel.Negative => Icons.Material.Filled.SentimentVeryDissatisfied,
+        SentimentLabel.Mixed    => Icons.Material.Filled.SentimentNeutral,
+        _                       => Icons.Material.Filled.HelpOutline
+    };
+
+    private static Severity SentimentSeverity(SentimentLabel s) => s switch
+    {
+        SentimentLabel.Positive => Severity.Success,
+        SentimentLabel.Negative => Severity.Error,
+        SentimentLabel.Mixed    => Severity.Warning,
+        _                       => Severity.Info
+    };
+}

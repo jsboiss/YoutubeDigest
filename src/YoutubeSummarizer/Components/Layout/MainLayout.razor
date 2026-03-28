@@ -1,0 +1,30 @@
+@inherits LayoutComponentBase
+
+<MudThemeProvider Theme="_theme" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout>
+    <MudAppBar Elevation="2" Color="Color.Error">
+        <MudIcon Icon="@Icons.Custom.Brands.YouTube" Class="mr-2" />
+        <MudText Typo="Typo.h6" Style="font-weight:600; letter-spacing:.5px">YouTube Summarizer</MudText>
+    </MudAppBar>
+    <MudMainContent Class="pt-16">
+        <MudContainer MaxWidth="MaxWidth.Large" Class="py-6">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private MudTheme _theme = new()
+    {
+        PaletteLight = new PaletteLight
+        {
+            Primary = "#FF0000",
+            AppbarBackground = "#CC0000",
+            Background = "#F5F5F5",
+        }
+    };
+}
