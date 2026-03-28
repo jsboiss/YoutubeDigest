@@ -1,3 +1,4 @@
 .vs/
 YoutubeDigest/bin/
 YoutubeDigest/obj/
+YoutubeDigest/appsettings.Development.json
