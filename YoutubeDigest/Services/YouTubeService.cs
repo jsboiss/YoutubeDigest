@@ -40,15 +40,26 @@ public class YouTubeService
 
     public async Task<string> GetTranscriptAsync(string videoId, CancellationToken ct = default)
     {
-        var trackManifest = await _youtube.Videos.ClosedCaptions.GetManifestAsync(videoId, ct);
+        try
+        {
+            var trackManifest = await _youtube.Videos.ClosedCaptions.GetManifestAsync(videoId, ct);
 
-        var track = trackManifest.TryGetByLanguage("en")
-            ?? trackManifest.Tracks.FirstOrDefault()
-            ?? throw new InvalidOperationException("No captions found for this video. It may not have subtitles enabled.");
+            var track = trackManifest.TryGetByLanguage("en")
+                ?? trackManifest.Tracks.FirstOrDefault()
+                ?? throw new InvalidOperationException("No captions found for this video. It may not have subtitles enabled.");
 
-        var captions = await _youtube.Videos.ClosedCaptions.GetAsync(track, ct);
+            var captions = await _youtube.Videos.ClosedCaptions.GetAsync(track, ct);
 
-        return string.Join(" ", captions.Captions.Select(c => c.Text));
+            return string.Join(" ", captions.Captions.Select(c => c.Text));
+        }
+        catch (InvalidOperationException)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex.Message.Contains("not available"))
+        {
+            throw new InvalidOperationException("This video is not available. It may be private, region-locked, or age-restricted.");
+        }
     }
 
     public async Task<VideoAnalysis> GetVideoMetadataAsync(string videoId, CancellationToken ct = default)
