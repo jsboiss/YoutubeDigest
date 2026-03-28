@@ -5,6 +5,8 @@ An AI-powered YouTube video analysis tool built with Blazor Server. Paste a YouT
 Feel free to test it out here:
 https://youtubedigest-production-568f.up.railway.app/
 
+<img width="1902" height="655" alt="image" src="https://github.com/user-attachments/assets/ddf9c60d-b800-4c41-9539-7874c9b781ed" />
+
 ## Features
 
 - **AI Summaries** — Generates a detailed summary of the video content using the Cerebras API (Llama 3.3-70B)
