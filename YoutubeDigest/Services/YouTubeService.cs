@@ -1,20 +1,23 @@
 using System.Net;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using System.Xml.Linq;
 using YoutubeDigest.Models;
+using YoutubeExplode;
+using YoutubeExplode.Videos.ClosedCaptions;
 
 namespace YoutubeDigest.Services;
 
 public class YouTubeService
 {
     private readonly HttpClient _http;
+    private readonly YoutubeClient _youtube;
     private readonly IConfiguration _config;
     private readonly ILogger<YouTubeService> _logger;
 
     public YouTubeService(IHttpClientFactory httpClientFactory, IConfiguration config, ILogger<YouTubeService> logger)
     {
         _http = httpClientFactory.CreateClient("YouTube");
+        _youtube = new YoutubeClient();
         _config = config;
         _logger = logger;
     }
@@ -23,15 +26,12 @@ public class YouTubeService
     {
         if (string.IsNullOrWhiteSpace(url)) return null;
 
-        // Handle youtu.be/ID
         var shortMatch = Regex.Match(url, @"youtu\.be/([a-zA-Z0-9_-]{11})");
         if (shortMatch.Success) return shortMatch.Groups[1].Value;
 
-        // Handle youtube.com/watch?v=ID
         var longMatch = Regex.Match(url, @"[?&]v=([a-zA-Z0-9_-]{11})");
         if (longMatch.Success) return longMatch.Groups[1].Value;
 
-        // Handle youtube.com/embed/ID or /shorts/ID
         var embedMatch = Regex.Match(url, @"(?:embed|shorts)/([a-zA-Z0-9_-]{11})");
         if (embedMatch.Success) return embedMatch.Groups[1].Value;
 
@@ -40,55 +40,15 @@ public class YouTubeService
 
     public async Task<string> GetTranscriptAsync(string videoId, CancellationToken ct = default)
     {
-        var request = new HttpRequestMessage(HttpMethod.Get, $"https://www.youtube.com/watch?v={videoId}");
-        request.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
-        request.Headers.Add("Accept-Language", "en-US,en;q=0.9");
+        var trackManifest = await _youtube.Videos.ClosedCaptions.GetManifestAsync(videoId, ct);
 
-        var response = await _http.SendAsync(request, ct);
-        response.EnsureSuccessStatusCode();
-        var html = await response.Content.ReadAsStringAsync(ct);
-
-        var captionUrl = ExtractCaptionUrl(html)
+        var track = trackManifest.TryGetByLanguage("en")
+            ?? trackManifest.Tracks.FirstOrDefault()
             ?? throw new InvalidOperationException("No captions found for this video. It may not have subtitles enabled.");
 
-        var xmlResponse = await _http.GetStringAsync(captionUrl, ct);
-        return ParseTranscriptXml(xmlResponse);
-    }
+        var captions = await _youtube.Videos.ClosedCaptions.GetAsync(track, ct);
 
-    private static string? ExtractCaptionUrl(string html)
-    {
-        const string marker = "\"captionTracks\":";
-        int idx = html.IndexOf(marker, StringComparison.Ordinal);
-        if (idx == -1) return null;
-
-        int urlIdx = html.IndexOf("\"baseUrl\":\"", idx, StringComparison.Ordinal);
-        if (urlIdx == -1) return null;
-
-        urlIdx += 11;
-        int urlEnd = html.IndexOf('"', urlIdx);
-        if (urlEnd == -1) return null;
-
-        var rawUrl = html[urlIdx..urlEnd];
-
-        // Unescape JSON string encoding (\u0026 → & etc.)
-        try
-        {
-            return JsonSerializer.Deserialize<string>($"\"{rawUrl}\"");
-        }
-        catch
-        {
-            return rawUrl.Replace("\\u0026", "&").Replace("\\u003d", "=");
-        }
-    }
-
-    private static string ParseTranscriptXml(string xml)
-    {
-        var doc = XDocument.Parse(xml);
-        var segments = doc.Descendants("text")
-            .Select(e => WebUtility.HtmlDecode(e.Value).Trim())
-            .Where(s => !string.IsNullOrWhiteSpace(s));
-
-        return string.Join(" ", segments);
+        return string.Join(" ", captions.Captions.Select(c => c.Text));
     }
 
     public async Task<VideoAnalysis> GetVideoMetadataAsync(string videoId, CancellationToken ct = default)

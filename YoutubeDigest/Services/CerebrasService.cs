@@ -8,8 +8,8 @@ namespace YoutubeDigest.Services;
 public class CerebrasService
 {
     private const string BaseUrl = "https://api.cerebras.ai/v1/chat/completions";
-    private const string Model = "llama-3.3-70b";
-    private const int MaxTranscriptChars = 24000;
+    private const string Model = "qwen-3-235b-a22b-instruct-2507";
+    private const int MaxTranscriptChars = 180000;
 
     private readonly HttpClient _http;
     private readonly IConfiguration _config;
@@ -88,7 +88,7 @@ public class CerebrasService
         if (!response.IsSuccessStatusCode)
         {
             _logger.LogError("Cerebras API error {Status}: {Body}", response.StatusCode, responseBody);
-            throw new InvalidOperationException($"Cerebras API returned {response.StatusCode}. Check your API key.");
+            throw new InvalidOperationException($"Cerebras API error ({response.StatusCode}): {responseBody}");
         }
 
         using var doc = JsonDocument.Parse(responseBody);
