@@ -40,7 +40,9 @@ if (googleConfigured)
         options.Events.OnCreatingTicket = ctx =>
         {
             if (ctx.AccessToken is not null)
+            {
                 ctx.Identity!.AddClaim(new Claim("access_token", ctx.AccessToken));
+            }
             return Task.CompletedTask;
         };
     });

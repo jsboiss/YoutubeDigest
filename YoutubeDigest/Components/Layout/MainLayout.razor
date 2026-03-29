@@ -8,7 +8,12 @@
 <MudLayout>
     <MudAppBar Elevation="2" Color="Color.Error">
         <MudIcon Icon="@Icons.Custom.Brands.YouTube" Class="mr-2" />
-        <MudText Typo="Typo.h6" Style="font-weight:600; letter-spacing:.5px">YouTube Digest</MudText>
+        <MudHidden Breakpoint="Breakpoint.Xs">
+            <MudText Typo="Typo.h6" Style="font-weight:600; letter-spacing:.5px">YouTube Digest</MudText>
+        </MudHidden>
+        <MudHidden Breakpoint="Breakpoint.Xs" Invert="true">
+            <MudText Typo="Typo.h6" Style="font-weight:600; letter-spacing:.5px">YD</MudText>
+        </MudHidden>
         <MudSpacer />
         <MudButton Href="/" Color="Color.Inherit" Variant="Variant.Text" Class="mx-1">Analyse</MudButton>
         <MudButton Href="/dashboard" Color="Color.Inherit" Variant="Variant.Text" Class="mx-1">My Feed</MudButton>
