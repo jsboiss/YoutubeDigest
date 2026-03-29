@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using MudBlazor.Services;
 using YoutubeDigest.Components;
@@ -14,6 +15,10 @@ if (port is not null)
 {
     builder.WebHost.UseUrls($"http://*:{port}");
 }
+
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo("/root/.aspnet/DataProtection-Keys"))
+    .SetApplicationName("YoutubeDigest");
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
@@ -60,7 +65,9 @@ if (!app.Environment.IsDevelopment())
 
 app.UseForwardedHeaders(new ForwardedHeadersOptions
 {
-    ForwardedHeaders = ForwardedHeaders.XForwardedProto
+    ForwardedHeaders = ForwardedHeaders.XForwardedProto,
+    KnownNetworks = { },
+    KnownProxies = { }
 });
 app.UseStaticFiles();
 app.UseAuthentication();
