@@ -3,54 +3,52 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using YoutubeDigest.Models;
 using YoutubeExplode;
-using YoutubeExplode.Videos.ClosedCaptions;
 
 namespace YoutubeDigest.Services;
 
-public class YouTubeService
+public class YouTubeService(IHttpClientFactory httpClientFactory, IConfiguration config, ILogger<YouTubeService> logger)
 {
-    private readonly HttpClient _http;
-    private readonly YoutubeClient _youtube;
-    private readonly IConfiguration _config;
-    private readonly ILogger<YouTubeService> _logger;
-
-    public YouTubeService(IHttpClientFactory httpClientFactory, IConfiguration config, ILogger<YouTubeService> logger)
-    {
-        _http = httpClientFactory.CreateClient("YouTube");
-        _youtube = new YoutubeClient();
-        _config = config;
-        _logger = logger;
-    }
+    private HttpClient HttpClient { get; } = httpClientFactory.CreateClient("YouTube");
+    private YoutubeClient YoutubeClient { get; } = new YoutubeClient();
 
     public static string? ExtractVideoId(string url)
     {
         if (string.IsNullOrWhiteSpace(url)) return null;
 
         var shortMatch = Regex.Match(url, @"youtu\.be/([a-zA-Z0-9_-]{11})");
-        if (shortMatch.Success) return shortMatch.Groups[1].Value;
+        if (shortMatch.Success)
+        {
+            return shortMatch.Groups[1].Value;
+        }
 
         var longMatch = Regex.Match(url, @"[?&]v=([a-zA-Z0-9_-]{11})");
-        if (longMatch.Success) return longMatch.Groups[1].Value;
+        if (longMatch.Success)
+        {
+            return longMatch.Groups[1].Value;
+        }
 
         var embedMatch = Regex.Match(url, @"(?:embed|shorts)/([a-zA-Z0-9_-]{11})");
-        if (embedMatch.Success) return embedMatch.Groups[1].Value;
+        if (embedMatch.Success)
+        {
+            return embedMatch.Groups[1].Value;
+        }
 
         return null;
     }
 
-    public async Task<string> GetTranscriptAsync(string videoId, CancellationToken ct = default)
+    public async Task<string> GetTranscript(string videoId, CancellationToken ct = default)
     {
         try
         {
-            var trackManifest = await _youtube.Videos.ClosedCaptions.GetManifestAsync(videoId, ct);
+            var trackManifest = await YoutubeClient.Videos.ClosedCaptions.GetManifestAsync(videoId, ct);
 
             var track = trackManifest.TryGetByLanguage("en")
                 ?? trackManifest.Tracks.FirstOrDefault()
                 ?? throw new InvalidOperationException("No captions found for this video. It may not have subtitles enabled.");
 
-            var captions = await _youtube.Videos.ClosedCaptions.GetAsync(track, ct);
+            var captions = await YoutubeClient.Videos.ClosedCaptions.GetAsync(track, ct);
 
-            return string.Join(" ", captions.Captions.Select(c => c.Text));
+            return string.Join(" ", captions.Captions.Select(x => x.Text));
         }
         catch (InvalidOperationException)
         {
@@ -62,25 +60,27 @@ public class YouTubeService
         }
     }
 
-    public async Task<VideoAnalysis> GetVideoMetadataAsync(string videoId, CancellationToken ct = default)
+    public async Task<VideoAnalysis> GetVideoMetadata(string videoId, CancellationToken ct = default)
     {
-        var apiKey = _config["YouTube:ApiKey"];
+        var apiKey = config["YouTube:ApiKey"];
         var result = new VideoAnalysis { VideoId = videoId };
 
         if (string.IsNullOrWhiteSpace(apiKey))
         {
-            _logger.LogWarning("YouTube API key not configured; skipping metadata fetch.");
+            logger.LogWarning("YouTube API key not configured; skipping metadata fetch.");
             return result;
         }
 
         var videoUrl = $"https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id={videoId}&key={apiKey}";
-        var videoResponse = await _http.GetStringAsync(videoUrl, ct);
+        var videoResponse = await HttpClient.GetStringAsync(videoUrl, ct);
 
         using var doc = JsonDocument.Parse(videoResponse);
         var items = doc.RootElement.GetProperty("items");
 
         if (items.GetArrayLength() == 0)
+        {
             return result;
+        }
 
         var item = items[0];
         var snippet = item.GetProperty("snippet");
@@ -90,39 +90,45 @@ public class YouTubeService
         result.ChannelName = snippet.GetProperty("channelTitle").GetString() ?? "";
         result.PublishedAt = snippet.GetProperty("publishedAt").GetString() ?? "";
 
-        if (snippet.TryGetProperty("thumbnails", out var thumbnails) &&
-            thumbnails.TryGetProperty("maxres", out var maxres))
+        if (snippet.TryGetProperty("thumbnails", out var thumbnails) && thumbnails.TryGetProperty("maxres", out var maxres))
+        {
             result.ThumbnailUrl = maxres.GetProperty("url").GetString() ?? "";
-        else if (snippet.TryGetProperty("thumbnails", out var thumbs2) &&
-                 thumbs2.TryGetProperty("high", out var high))
+        }
+            
+        else if (snippet.TryGetProperty("thumbnails", out var thumbs2) && thumbs2.TryGetProperty("high", out var high))
+        {
             result.ThumbnailUrl = high.GetProperty("url").GetString() ?? "";
+        }
 
-        if (stats.TryGetProperty("viewCount", out var views) &&
-            long.TryParse(views.GetString(), out var viewCount))
+        if (stats.TryGetProperty("viewCount", out var views) && long.TryParse(views.GetString(), out var viewCount))
+        {
             result.ViewCount = viewCount;
+        }
 
-        if (stats.TryGetProperty("likeCount", out var likes) &&
-            long.TryParse(likes.GetString(), out var likeCount))
+        if (stats.TryGetProperty("likeCount", out var likes) && long.TryParse(likes.GetString(), out var likeCount))
+        {
             result.LikeCount = likeCount;
+        }
 
-        if (stats.TryGetProperty("commentCount", out var comments) &&
-            long.TryParse(comments.GetString(), out var commentCount))
+        if (stats.TryGetProperty("commentCount", out var comments) && long.TryParse(comments.GetString(), out var commentCount))
+        {
             result.CommentCount = commentCount;
+        }
 
         return result;
     }
 
-    public async Task<List<VideoComment>> GetTopCommentsAsync(string videoId, int maxResults = 5, CancellationToken ct = default)
+    public async Task<List<VideoComment>> GetTopComments(string videoId, int maxResults = 5, CancellationToken ct = default)
     {
-        var apiKey = _config["YouTube:ApiKey"];
+        var apiKey = config["YouTube:ApiKey"];
         if (string.IsNullOrWhiteSpace(apiKey))
         {
-            _logger.LogWarning("YouTube API key not configured; skipping comments fetch.");
-            return new();
+            logger.LogWarning("YouTube API key not configured; skipping comments fetch.");
+            return [];
         }
 
         var url = $"https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId={videoId}&order=relevance&maxResults={maxResults}&key={apiKey}";
-        var json = await _http.GetStringAsync(url, ct);
+        var json = await HttpClient.GetStringAsync(url, ct);
 
         using var doc = JsonDocument.Parse(json);
         var items = doc.RootElement.GetProperty("items");
@@ -134,7 +140,10 @@ public class YouTubeService
             var text = top.GetProperty("textDisplay").GetString() ?? "";
             var author = top.GetProperty("authorDisplayName").GetString() ?? "";
             long likes = 0;
-            if (top.TryGetProperty("likeCount", out var lc)) likes = lc.GetInt64();
+            if (top.TryGetProperty("likeCount", out var likeCount))
+            {
+                likes = likeCount.GetInt64();
+            }
 
             result.Add(new VideoComment { Author = author, Text = WebUtility.HtmlDecode(text), LikeCount = likes });
         }

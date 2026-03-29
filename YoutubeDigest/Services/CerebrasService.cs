@@ -5,24 +5,15 @@ using YoutubeDigest.Models;
 
 namespace YoutubeDigest.Services;
 
-public class CerebrasService
+public class CerebrasService(IHttpClientFactory httpClientFactory, IConfiguration config, ILogger<CerebrasService> logger)
 {
     private const string BaseUrl = "https://api.cerebras.ai/v1/chat/completions";
     private const string Model = "qwen-3-235b-a22b-instruct-2507";
     private const int MaxTranscriptChars = 180000;
 
-    private readonly HttpClient _http;
-    private readonly IConfiguration _config;
-    private readonly ILogger<CerebrasService> _logger;
+    private HttpClient HttpClient { get; } = httpClientFactory.CreateClient("Cerebras");
 
-    public CerebrasService(IHttpClientFactory httpClientFactory, IConfiguration config, ILogger<CerebrasService> logger)
-    {
-        _http = httpClientFactory.CreateClient("Cerebras");
-        _config = config;
-        _logger = logger;
-    }
-
-    public async Task<string> SummarizeTranscriptAsync(string transcript, string videoTitle = "", CancellationToken ct = default)
+    public async Task<string> DigestTranscript(string transcript, string videoTitle = "", CancellationToken ct = default)
     {
         var truncated = transcript.Length > MaxTranscriptChars
             ? transcript[..MaxTranscriptChars] + "\n\n[Transcript truncated for length]"
@@ -34,13 +25,15 @@ public class CerebrasService
                      "Cover the main topics, key points, and any conclusions. " +
                      "Format your response in clear paragraphs.\n\nTRANSCRIPT:\n" + truncated;
 
-        return await CallCerebrasAsync("You are an expert at summarizing video content accurately and thoroughly.", prompt, 1500, ct);
+        return await PromptCerebras("You are an expert at summarizing video content accurately and thoroughly.", prompt, 1500, ct);
     }
 
-    public async Task<(string summary, SentimentLabel label)> AnalyzeCommentSentimentAsync(List<VideoComment> comments, CancellationToken ct = default)
+    public async Task<(string summary, SentimentLabel label)> AnalyseCommentSentiment(List<VideoComment> comments, CancellationToken ct = default)
     {
         if (comments.Count == 0)
+        {
             return ("No comments available to analyze.", SentimentLabel.Unknown);
+        }
 
         var commentBlock = string.Join("\n---\n", comments.Select(c => $"{c.Author}: {c.Text}"));
 
@@ -48,7 +41,7 @@ public class CerebrasService
                      "Start your response with exactly one of: \"Positive:\", \"Negative:\", \"Mixed:\", or \"Neutral:\" " +
                      "followed by a 2-3 sentence summary of what viewers think.\n\nCOMMENTS:\n" + commentBlock;
 
-        var response = await CallCerebrasAsync("You are an expert at analyzing audience sentiment and reactions.", prompt, 300, ct);
+        var response = await PromptCerebras("You are an expert at analyzing audience sentiment and reactions.", prompt, 300, ct);
 
         var label = SentimentLabel.Neutral;
         if (response.StartsWith("Positive:", StringComparison.OrdinalIgnoreCase)) label = SentimentLabel.Positive;
@@ -58,9 +51,9 @@ public class CerebrasService
         return (response, label);
     }
 
-    private async Task<string> CallCerebrasAsync(string systemPrompt, string userPrompt, int maxTokens, CancellationToken ct)
+    private async Task<string> PromptCerebras(string systemPrompt, string userPrompt, int maxTokens, CancellationToken ct)
     {
-        var apiKey = _config["Cerebras:ApiKey"]
+        var apiKey = config["Cerebras:ApiKey"]
             ?? throw new InvalidOperationException("Cerebras API key is not configured.");
 
         var payload = new
@@ -82,12 +75,12 @@ public class CerebrasService
         };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
 
-        var response = await _http.SendAsync(request, ct);
+        var response = await HttpClient.SendAsync(request, ct);
         var responseBody = await response.Content.ReadAsStringAsync(ct);
 
         if (!response.IsSuccessStatusCode)
         {
-            _logger.LogError("Cerebras API error {Status}: {Body}", response.StatusCode, responseBody);
+            logger.LogError("Cerebras API error {Status}: {Body}", response.StatusCode, responseBody);
             throw new InvalidOperationException($"Cerebras API error ({response.StatusCode}): {responseBody}");
         }
 

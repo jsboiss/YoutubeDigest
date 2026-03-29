@@ -1,0 +1,139 @@
+@page "/dashboard"
+@inject AuthenticationStateProvider AuthStateProvider
+@inject SubscriptionService SubscriptionService
+@inject IDialogService DialogService
+
+<PageTitle>Feed - YouTube Digest</PageTitle>
+
+<AuthorizeView>
+    <NotAuthorized>
+        <MudContainer Class="d-flex flex-column align-center justify-center" Style="min-height: 60vh;">
+            <MudIcon Icon="@Icons.Custom.Brands.YouTube" Style="font-size: 4rem; color: #FF0000;" Class="mb-4" />
+            <MudText Typo="Typo.h5" Class="mb-2">Sign in to see your feed</MudText>
+            <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mb-6" Align="Align.Center">
+                Connect your Google account to browse your YouTube subscriptions as text summaries
+            </MudText>
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Error"
+                       Size="Size.Large"
+                       Href="/auth/login"
+                       StartIcon="@Icons.Material.Filled.Login">
+                Sign in with Google
+            </MudButton>
+        </MudContainer>
+    </NotAuthorized>
+    <Authorized>
+        <MudText Typo="Typo.h5" Class="mb-1">Your Feed</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-5">
+            Recent uploads from your subscriptions — click any video to read the AI summary
+        </MudText>
+
+        @if (Loading)
+        {
+            <MudGrid>
+                @for (int i = 0; i < 12; i++)
+                {
+                    <MudItem xs="12" sm="6" md="4" lg="3">
+                        <MudCard>
+                            <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="160px" />
+                            <MudCardContent>
+                                <MudSkeleton Width="90%" Class="mb-1" />
+                                <MudSkeleton Width="55%" />
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+        else if (Error != null)
+        {
+            <MudAlert Severity="Severity.Error">@Error</MudAlert>
+        }
+        else if (Videos.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">No recent videos found from your subscriptions.</MudAlert>
+        }
+        else
+        {
+            <MudGrid>
+                @foreach (var video in Videos)
+                {
+                    var v = video;
+                    <MudItem xs="12" sm="6" md="4" lg="3">
+                        <MudCard Style="cursor: pointer; height: 100%;"
+                                 @onclick="() => OpenSummary(v)"
+                                 Elevation="2"
+                                 Class="video-card">
+                            <MudCardMedia Image="@v.ThumbnailUrl" Height="160" />
+                            <MudCardContent>
+                                <MudText Typo="Typo.subtitle2"
+                                         Style="font-weight: 600; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;"
+                                         Class="mb-1">
+                                    @v.Title
+                                </MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@v.ChannelName</MudText>
+                                <br />
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@FormatDate(v.PublishedAt)</MudText>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    private List<FeedVideo> Videos { get; set; } = [];
+    private bool Loading { get; set; } = true;
+    private string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        if (authState.User.Identity?.IsAuthenticated != true)
+        {
+            Loading = false;
+            return;
+        }
+
+        var token = authState.User.FindFirst("access_token")?.Value;
+        if (string.IsNullOrEmpty(token))
+        {
+            Error = "Could not retrieve your access token. Please sign out and sign in again.";
+            Loading = false;
+            return;
+        }
+
+        try
+        {
+            Videos = await SubscriptionService.GetSubscriptionFeed(token);
+        }
+        catch (Exception ex)
+        {
+            Error = $"Failed to load your feed: {ex.Message}";
+        }
+        finally
+        {
+            Loading = false;
+        }
+    }
+
+    private async Task OpenSummary(FeedVideo video)
+    {
+        var parameters = new DialogParameters<SummaryDialog>
+        {
+            { x => x.Video, video }
+        };
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true,
+            CloseOnEscapeKey = true
+        };
+        await DialogService.ShowAsync<SummaryDialog>(video.Title, parameters, options);
+    }
+
+    private static string FormatDate(string iso) =>
+        DateTime.TryParse(iso, out var dt) ? dt.ToString("MMM d, yyyy") : iso;
+}

@@ -1,6 +1,6 @@
 @inherits LayoutComponentBase
 
-<MudThemeProvider Theme="_theme" IsDarkMode="_isDarkMode" />
+<MudThemeProvider Theme="_theme" IsDarkMode="IsDarkMode" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
@@ -10,10 +10,28 @@
         <MudIcon Icon="@Icons.Custom.Brands.YouTube" Class="mr-2" />
         <MudText Typo="Typo.h6" Style="font-weight:600; letter-spacing:.5px">YouTube Digest</MudText>
         <MudSpacer />
-        <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
+        <MudButton Href="/" Color="Color.Inherit" Variant="Variant.Text" Class="mx-1">Analyse</MudButton>
+        <MudButton Href="/dashboard" Color="Color.Inherit" Variant="Variant.Text" Class="mx-1">My Feed</MudButton>
+        <MudIconButton Icon="@(IsDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
                        Color="Color.Inherit"
-                       OnClick="@(() => _isDarkMode = !_isDarkMode)"
-                       Title="@(_isDarkMode ? "Switch to light mode" : "Switch to dark mode")" />
+                       OnClick="@(() => IsDarkMode = !IsDarkMode)"
+                       UserAttributes="@(new Dictionary<string, object> { ["title"] = IsDarkMode ? "Switch to light mode" : "Switch to dark mode" })" />
+        <AuthorizeView>
+            <Authorized>
+                <MudTooltip Text="@($"Signed in as {context.User.Identity?.Name}")">
+                    <MudIconButton Icon="@Icons.Material.Filled.AccountCircle"
+                                   Color="Color.Inherit"
+                                   Href="/auth/logout"
+                                   UserAttributes="@(new Dictionary<string, object> { ["title"] = "Sign out" })" />
+                </MudTooltip>
+            </Authorized>
+            <NotAuthorized>
+                <MudIconButton Icon="@Icons.Material.Filled.Login"
+                               Color="Color.Inherit"
+                               Href="/auth/login"
+                               UserAttributes="@(new Dictionary<string, object> { ["title"] = "Sign in with Google" })" />
+            </NotAuthorized>
+        </AuthorizeView>
     </MudAppBar>
     <MudMainContent Class="pt-16">
         <MudContainer MaxWidth="MaxWidth.Large" Class="py-6">
@@ -23,7 +41,7 @@
 </MudLayout>
 
 @code {
-    private bool _isDarkMode = false;
+    private bool IsDarkMode { get; set; } = true;
 
     private MudTheme _theme = new()
     {

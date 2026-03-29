@@ -1,0 +1,73 @@
+@inject YouTubeService YouTubeService
+@inject CerebrasService CerebrasService
+@inject SummaryCache SummaryCache
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">@Video.Title</MudText>
+        <MudText Typo="Typo.caption" Color="Color.Secondary">@Video.ChannelName</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_loading)
+        {
+            <MudProgressLinear Indeterminate Color="Color.Error" Class="mb-4" />
+            <MudSkeleton Class="mb-2" />
+            <MudSkeleton Class="mb-2" />
+            <MudSkeleton Width="80%" Class="mb-2" />
+            <MudSkeleton Class="mb-2" />
+            <MudSkeleton Width="65%" />
+        }
+        else if (_error != null)
+        {
+            <MudAlert Severity="Severity.Error">@_error</MudAlert>
+        }
+        else
+        {
+            <MudText Style="white-space: pre-wrap; line-height: 1.7;">@_summary</MudText>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text"
+                   Href="@($"https://youtube.com/watch?v={Video.VideoId}")"
+                   Target="_blank"
+                   StartIcon="@Icons.Custom.Brands.YouTube">
+            Watch on YouTube
+        </MudButton>
+        <MudSpacer />
+        <MudButton Variant="Variant.Filled" Color="Color.Default" OnClick="@(() => MudDialog.Close())">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public FeedVideo Video { get; set; } = null!;
+
+    private bool _loading = true;
+    private string? _summary;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (SummaryCache.TryGet(Video.VideoId, out var cached))
+        {
+            _summary = cached;
+            _loading = false;
+            return;
+        }
+
+        try
+        {
+            var transcript = await YouTubeService.GetTranscript(Video.VideoId);
+            _summary = await CerebrasService.DigestTranscript(transcript, Video.Title);
+            SummaryCache.Set(Video.VideoId, _summary);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}
