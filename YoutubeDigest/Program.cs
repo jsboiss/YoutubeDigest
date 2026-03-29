@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.DataProtection;
-using Microsoft.AspNetCore.HttpOverrides;
 using MudBlazor.Services;
 using YoutubeDigest.Components;
 using YoutubeDigest.Services;
@@ -63,12 +62,14 @@ if (!app.Environment.IsDevelopment())
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
 }
 
-app.UseForwardedHeaders(new ForwardedHeadersOptions
+if (!app.Environment.IsDevelopment())
 {
-    ForwardedHeaders = ForwardedHeaders.XForwardedProto,
-    KnownNetworks = { },
-    KnownProxies = { }
-});
+    app.Use((context, next) =>
+    {
+        context.Request.Scheme = "https";
+        return next();
+    });
+}
 app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
